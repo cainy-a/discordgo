@@ -13,8 +13,12 @@ package discordgo
 
 import "strconv"
 
-// APIVersion is the Discord API version used for the REST and Websocket API.
-var APIVersion = "6"
+// RestAPIBaseVersion is the Discord API version used for the REST API.
+// There are exceptional endpoints that already use a newer version.
+var RestAPIBaseVersion = "6"
+
+// GateAPIVersion is the Discord API version used for Websocket API.
+var GateAPIVersion = "8"
 
 // Known Discord API Endpoints.
 var (
@@ -172,7 +176,7 @@ func SetEndpoints(main, status, cdn string) {
 
 	EndpointDiscord = main
 	EndpointAPINoVersion = EndpointDiscord + "api/v"
-	EndpointAPI = EndpointDiscord + "api/v" + APIVersion + "/"
+	EndpointAPI = EndpointDiscord + "api/v" + RestAPIBaseVersion + "/"
 	EndpointGuilds = EndpointAPI + "guilds/"
 	EndpointChannels = EndpointAPI + "channels/"
 	EndpointUsers = EndpointAPI + "users/"
