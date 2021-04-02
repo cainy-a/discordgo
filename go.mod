@@ -1,4 +1,4 @@
-module github.com/Bios-Marcel/discordgo
+module github.com/cainy-a/discordgo
 
 go 1.12
 
