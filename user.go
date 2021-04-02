@@ -8,6 +8,9 @@ const (
 	UserPremiumTypeNone UserPremiumType = iota
 	UserPremiumTypeNitroClassic
 	UserPremiumTypeNitro
+)
+
+
 // UserFlags is the flags of "user" (see UserFlags* consts)
 // https://discord.com/developers/docs/resources/user#user-object-user-flags
 type UserFlags int
