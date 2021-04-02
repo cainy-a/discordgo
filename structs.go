@@ -940,12 +940,13 @@ type ReadState struct {
 // GetLastMessageID returns the LastMessageID attribute and returns an empty
 // string in case the Discord API returned a zero to signal an empty string.
 func (readState *ReadState) GetLastMessageID() string {
-	asString, ok := readState.LastMessageID.(string)
+	/*asString, ok := readState.LastMessageID.(string)
 	if ok {
 		return asString
 	}
 
-	return ""
+	return ""*/
+	return readState.LastMessageID
 }
 
 // An Ack is used to ack messages
@@ -1154,12 +1155,13 @@ type MuteConfig struct {
 // GetGuildID is a workaround for when the Discord API send an integer instead
 // of sending a string.
 func (settings *UserGuildSettings) GetGuildID() string {
-	asString, ok := settings.GuildID.(string)
+	/*asString, ok := settings.GuildID.(string)
 	if ok {
 		return asString
 	}
 
-	return ""
+	return ""*/
+	return settings.GuildID
 }
 
 // A UserGuildSettingsEdit stores data for editing UserGuildSettings
@@ -1175,27 +1177,6 @@ type UserGuildSettingsEdit struct {
 type APIErrorMessage struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
-}
-
-// Webhook stores the data for a webhook.
-type Webhook struct {
-	ID        string `json:"id"`
-	GuildID   string `json:"guild_id"`
-	ChannelID string `json:"channel_id"`
-	User      *User  `json:"user"`
-	Name      string `json:"name"`
-	Avatar    string `json:"avatar"`
-	Token     string `json:"token"`
-}
-
-// WebhookParams is a struct for webhook params, used in the WebhookExecute command.
-type WebhookParams struct {
-	Content   string          `json:"content,omitempty"`
-	Username  string          `json:"username,omitempty"`
-	AvatarURL string          `json:"avatar_url,omitempty"`
-	TTS       bool            `json:"tts,omitempty"`
-	File      string          `json:"file,omitempty"`
-	Embeds    []*MessageEmbed `json:"embeds,omitempty"`
 }
 
 // MessageReaction stores the data for a message reaction.

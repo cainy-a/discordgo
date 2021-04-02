@@ -173,7 +173,7 @@ func New(args ...interface{}) (s *Session, err error) {
 		s.Identify.Token = auth
 		s.Token = auth // TODO: Remove, Deprecated - Kept for backwards compatibility.
 	} else {
-		err = s.Login(auth, pass)
+		_, err = s.Login(auth, pass)
 		// TODO: Remove last s.Token part, Deprecated - Kept for backwards compatibility.
 		if err != nil || s.Identify.Token == "" || s.Token == "" {
 			if s.MFA {
