@@ -2,6 +2,12 @@ package discordgo
 
 import "strings"
 
+type UserPremiumType int
+
+const (
+	UserPremiumTypeNone UserPremiumType = iota
+	UserPremiumTypeNitroClassic
+	UserPremiumTypeNitro
 // UserFlags is the flags of "user" (see UserFlags* consts)
 // https://discord.com/developers/docs/resources/user#user-object-user-flags
 type UserFlags int
@@ -63,9 +69,9 @@ type User struct {
 	// be checked by performing a bitwise AND between this int and the flag.
 	PublicFlags UserFlags `json:"public_flags"`
 
-	// The type of Nitro subscription on a user's account.
-	// Only available when the request is authorized via a Bearer token.
-	PremiumType int `json:"premium_type"`
+	// PremiumType indicates whether the user has Discord Nitro and if
+	// so, which type of Discord Nitro.
+	PremiumType UserPremiumType `json:"premium_type"`
 
 	// Whether the user is an Official Discord System user (part of the urgent message system).
 	System bool `json:"system"`

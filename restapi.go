@@ -1,7 +1,7 @@
 // Discordgo - Discord bindings for Go
-// Available at https://github.com/bwmarrin/discordgo
+// Available at https://github.com/cainy-a/discordgo
 
-// Copyright 2015-2016 Bruce Marriner <bruce@sqls.net>.  All rights reserved.
+// Copyright 2015-2021 Cain Atkinson <yellowsink@protonmail.com>.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -163,11 +163,8 @@ func (s *Session) RequestWithLockedBucket(method, urlStr, contentType string, b 
 
 		response, err = s.RequestWithLockedBucket(method, urlStr, contentType, b, s.Ratelimiter.LockBucketObject(bucket), sequence)
 	case http.StatusUnauthorized:
-		if strings.Index(s.Token, "Bot ") != 0 {
-			s.log(LogInformational, ErrUnauthorized.Error())
-			err = ErrUnauthorized
-		}
-		fallthrough
+		s.log(LogInformational, ErrUnauthorized.Error())
+		err = ErrUnauthorized
 	default: // Error condition
 		err = newRestError(req, resp, response)
 	}
@@ -188,6 +185,12 @@ func unmarshal(data []byte, v interface{}) error {
 // Functions specific to Discord Sessions
 // ------------------------------------------------------------------------------------------------
 
+type LoginInfo struct {
+	Token  string `json:"token"`
+	MFA    bool   `json:"mfa"`
+	Ticket string `json:"ticket"`
+}
+
 // Login asks the Discord server for an authentication token.
 //
 // NOTE: While email/pass authentication is supported by DiscordGo it is
@@ -195,7 +198,7 @@ func unmarshal(data []byte, v interface{}) error {
 // and then use that authentication token for all future connections.
 // Also, doing any form of automation with a user (non Bot) account may result
 // in that account being permanently banned from Discord.
-func (s *Session) Login(email, password string) (err error) {
+func (s *Session) Login(email, password string) (*LoginInfo, error) {
 
 	data := struct {
 		Email    string `json:"email"`
@@ -204,22 +207,146 @@ func (s *Session) Login(email, password string) (err error) {
 
 	response, err := s.RequestWithBucketID("POST", EndpointLogin, data, EndpointLogin)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	temp := struct {
-		Token string `json:"token"`
-		MFA   bool   `json:"mfa"`
-	}{}
+	temp := &LoginInfo{}
 
-	err = unmarshal(response, &temp)
+	err = unmarshal(response, temp)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	s.Token = temp.Token
+	s.Identify.Token = temp.Token
 	s.MFA = temp.MFA
-	return
+	return temp, nil
+}
+
+func (s *Session) totp(ticket, code string) (string, error) {
+
+	data := struct {
+		Code          string  `json:"code"`
+		GiftCodeSkuID *string `json:"gift_code_sku_id"`
+		LoginSource   *string `json:"login_source"`
+		Ticket        string  `json:"ticket"`
+	}{
+		Code:   code,
+		Ticket: ticket,
+	}
+
+	response, err := s.RequestWithBucketID("POST", EndpointTotpLogin, data, EndpointTotpLogin)
+	if err != nil {
+		return "", err
+	}
+
+	temp := &struct {
+		Token string `json:"token"`
+	}{}
+
+	err = unmarshal(response, temp)
+	return temp.Token, err
+}
+
+// TwoFactorDisable disables TwoFactorAuthentication for the account.
+func (s *Session) TwoFactorDisable(code string) error {
+	data := struct {
+		Code string `json:"code"`
+	}{code}
+
+	response, err := s.RequestWithBucketID("POST", EndpointTotpDisable, data, EndpointTotpDisable)
+	if err != nil {
+		return err
+	}
+
+	temp := &struct {
+		Token string `json:"token"`
+	}{}
+	err = unmarshal(response, temp)
+	if err == nil {
+		//Downgraded token (MFA Token -> Non-MFA Token)
+		s.Token = temp.Token
+		s.Identify.Token = temp.Token
+		s.MFA = false
+	}
+
+	return err
+}
+
+type TFABackupCode struct {
+	Consumed bool   `json:"consumed"`
+	Code     string `json:"code"`
+}
+
+// TwoFactorEnable enables two factor for this account using the given seed.
+// On success, backup codes will be returned, in case the 2fa device was lost.
+func (s *Session) TwoFactorEnable(secret, code string) ([]*TFABackupCode, error) {
+	data := struct {
+		Code   string `json:"code"`
+		Secret string `json:"secret"`
+	}{
+		Code:   code,
+		Secret: secret,
+	}
+
+	response, err := s.RequestWithBucketID("POST", EndpointTotpEnable, data, EndpointTotpEnable)
+	if err != nil {
+		return nil, err
+	}
+
+	temp := &struct {
+		Token       string           `json:"token"`
+		BackupCodes []*TFABackupCode `json:"backup_codes"`
+	}{}
+
+	err = unmarshal(response, temp)
+	if err != nil {
+		return nil, err
+	}
+
+	s.Token = temp.Token
+	s.Identify.Token = temp.Token
+	s.MFA = true
+
+	return temp.BackupCodes, err
+}
+
+// GetTwoFactorBackupCodes returns all backup codes, even the used ones, that
+// can be used to recover your account in case you lost your 2FA device.
+func (s *Session) GetTwoFactorBackupCodes(password string) ([]*TFABackupCode, error) {
+	return s.getTwoFactorBackupCodes(password, false)
+}
+
+// RegenerateTwoFactorBackupCodes generates new backup tokens for the case that
+// you have lost your 2FA devices and returns them.
+func (s *Session) RegenerateTwoFactorBackupCodes(password string) ([]*TFABackupCode, error) {
+	return s.getTwoFactorBackupCodes(password, true)
+}
+
+func (s *Session) getTwoFactorBackupCodes(password string, regenerate bool) ([]*TFABackupCode, error) {
+	data := struct {
+		Password   string `json:"password"`
+		Regenerate bool   `json:"regenerate"`
+	}{
+		Password:   password,
+		Regenerate: regenerate,
+	}
+
+	response, err := s.RequestWithBucketID("POST", EndpointMFACodes, data, EndpointMFACodes)
+	if err != nil {
+		return nil, err
+	}
+
+	temp := &struct {
+		BackupCodes []*TFABackupCode `json:"backup_codes"`
+	}{}
+
+	err = unmarshal(response, temp)
+	if err != nil {
+		return nil, err
+	}
+
+	return temp.BackupCodes, err
 }
 
 // Register sends a Register request to Discord, and returns the authentication token
@@ -367,6 +494,22 @@ func (s *Session) UserUpdateStatus(status Status) (st *Settings, err error) {
 	return
 }
 
+// UserUpdateStatusCustom update the user status with a custom status
+// status   : The new status
+func (s *Session) UserUpdateStatusCustom(status CustomStatus) (st *Settings, err error) {
+	data := struct {
+		CustomStatus CustomStatus `json:"custom_status"`
+	}{status}
+
+	body, err := s.RequestWithBucketID("PATCH", EndpointUserSettings("@me"), data, EndpointUserSettings(""))
+	if err != nil {
+		return
+	}
+
+	err = unmarshal(body, &st)
+	return
+}
+
 // UserConnections returns the user's connections
 func (s *Session) UserConnections() (conn []*UserConnection, err error) {
 	response, err := s.RequestWithBucketID("GET", EndpointUserConnections("@me"), nil, EndpointUserConnections("@me"))
@@ -398,12 +541,13 @@ func (s *Session) UserChannels() (st []*Channel, err error) {
 // UserChannelCreate creates a new User (Private) Channel with another User
 // recipientID : A user ID for the user to which this channel is opened with.
 func (s *Session) UserChannelCreate(recipientID string) (st *Channel, err error) {
-
 	data := struct {
-		RecipientID string `json:"recipient_id"`
-	}{recipientID}
+		Recipients []string `json:"recipients"`
+	}{
+		Recipients: []string{recipientID},
+	}
 
-	body, err := s.RequestWithBucketID("POST", EndpointUserChannels("@me"), data, EndpointUserChannels(""))
+	body, err := s.RequestWithBucketID("POST", EndpointUserChannelsV8("@me"), data, EndpointUserChannelsV8(""))
 	if err != nil {
 		return
 	}
@@ -1539,6 +1683,91 @@ func (s *Session) ChannelMessageAck(channelID, messageID, lastToken string) (st 
 	return
 }
 
+type bulkAck struct {
+	ReadStates []*bulkAckEntry `json:"read_states"`
+}
+
+type bulkAckEntry struct {
+	ChannelID string `json:"channel_id"`
+	MessageID string `json:"message_id"`
+}
+
+// GuildMessageAck marks all channels in a server as read.
+func (s *Session) GuildMessageAck(guildID string) error {
+	guild, stateError := s.State.Guild(guildID)
+	if stateError != nil {
+		return stateError
+	}
+
+	var acks []*bulkAckEntry
+CHANNEL_LOOP:
+	for _, channel := range guild.Channels {
+		for _, readState := range s.State.Ready.ReadState {
+			//We avoid sending unnecessary acks when we are sure we've
+			//already read a channel.
+			if readState.ID == channel.ID {
+				if readState.LastMessageID == channel.LastMessageID {
+					continue CHANNEL_LOOP
+				}
+
+				//If the readstat is outdated, then we add an entry to the array.
+				break
+			}
+		}
+
+		if channel.LastMessageID != "" {
+			acks = append(acks, &bulkAckEntry{
+				ChannelID: channel.ID,
+				MessageID: channel.LastMessageID,
+			})
+		}
+	}
+
+	// Nothing to tell the server
+	if len(acks) == 0 {
+		return nil
+	}
+
+	_, requestError := s.Request("POST", EndpointReadStatesAckBulk, &bulkAck{acks})
+	return requestError
+}
+
+// BulkChannelMessageAck acknowledges the message in all given channels. This
+// is useful for acknowleding categories for example.
+func (s *Session) BulkChannelMessageAck(channels []*Channel) error {
+	var acks []*bulkAckEntry
+CHANNEL_LOOP:
+	for _, channel := range channels {
+		for _, readState := range s.State.Ready.ReadState {
+			//We avoid sending unnecessary acks when we are sure we've
+			//already read a channel.
+			if readState.ID == channel.ID {
+				if readState.LastMessageID == channel.LastMessageID {
+					continue CHANNEL_LOOP
+				}
+
+				//If the readstat is outdated, then we add an entry to the array.
+				break
+			}
+		}
+
+		if channel.LastMessageID != "" {
+			acks = append(acks, &bulkAckEntry{
+				ChannelID: channel.ID,
+				MessageID: channel.LastMessageID,
+			})
+		}
+	}
+
+	// Nothing to tell the server
+	if len(acks) == 0 {
+		return nil
+	}
+
+	_, requestError := s.Request("POST", EndpointReadStatesAckBulk, &bulkAck{acks})
+	return requestError
+}
+
 // ChannelMessageSend sends a message to the given channel.
 // channelID : The ID of a Channel.
 // content   : The message to send.
@@ -2392,6 +2621,18 @@ func (s *Session) relationshipCreate(userID string, relationshipType int) (err e
 func (s *Session) RelationshipFriendRequestSend(userID string) (err error) {
 	err = s.relationshipCreate(userID, 4)
 	return
+}
+
+// RelationshipFriendRequestSend sends a friend request to a user.
+// userID: ID of the user.
+func (s *Session) RelationshipFriendRequestSendByNameAndDiscriminator(name string, discriminator int) error {
+	data := struct {
+		Username      string `json:"username"`
+		Discriminator int    `json:"discriminator"`
+	}{name, discriminator}
+
+	_, err := s.Request("POST", EndpointRelationships(), data)
+	return err
 }
 
 // RelationshipFriendRequestAccept accepts a friend request from a user.

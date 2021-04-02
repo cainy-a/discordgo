@@ -1,7 +1,7 @@
 // Discordgo - Discord bindings for Go
-// Available at https://github.com/bwmarrin/discordgo
+// Available at https://github.com/cainy-a/discordgo
 
-// Copyright 2015-2016 Bruce Marriner <bruce@sqls.net>.  All rights reserved.
+// Copyright 2015-2021 Cain Atkinson <yellowsink@protonmail.com>.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -47,6 +47,9 @@ type Message struct {
 
 	// The ID of the channel in which the message was sent.
 	ChannelID string `json:"channel_id"`
+
+	// ReferenceMessage is a message that this message was written in reply to.
+	ReferencedMessage *Message `json:"referenced_message"`
 
 	// The ID of the guild in which the message was sent.
 	GuildID string `json:"guild_id,omitempty"`

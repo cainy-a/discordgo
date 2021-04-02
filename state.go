@@ -1,7 +1,7 @@
 // Discordgo - Discord bindings for Go
-// Available at https://github.com/bwmarrin/discordgo
+// Available at https://github.com/cainy-a/discordgo
 
-// Copyright 2015-2016 Bruce Marriner <bruce@sqls.net>.  All rights reserved.
+// Copyright 2015-2021 Cain Atkinson <yellowsink@protonmail.com>.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -370,6 +370,72 @@ func (s *State) Member(guildID, userID string) (*Member, error) {
 	}
 
 	return nil, ErrStateNotFound
+}
+
+// MembersAdd adds all passed members to the cache for the given guild. If
+// needed, the guildID of members will be filled.
+func (s *State) MembersAdd(guildID string, newMembers []*Member) error {
+	if s == nil {
+		return ErrNilState
+	}
+
+	s.RLock()
+	defer s.RUnlock()
+
+	guild, err := s.Guild(guildID)
+	if err != nil {
+		return err
+	}
+
+	members, ok := s.memberMap[guildID]
+	if !ok {
+		return ErrStateNotFound
+	}
+
+	for _, member := range newMembers {
+		if member.GuildID == "" {
+			member.GuildID = guildID
+		}
+
+		m, ok := members[member.User.ID]
+		if !ok {
+			members[member.User.ID] = member
+			guild.Members = append(guild.Members, member)
+		} else {
+			// We are about to replace `m` in the state with `member`, but first we need to
+			// make sure we preserve any fields that the `member` doesn't contain from `m`.
+			if member.JoinedAt == "" {
+				member.JoinedAt = m.JoinedAt
+			}
+			*m = *member
+		}
+	}
+
+	return nil
+}
+
+// Members gets all available members in a guild
+func (s *State) Members(guildID string) ([]*Member, error) {
+	if s == nil {
+		return nil, ErrNilState
+	}
+
+	s.RLock()
+	defer s.RUnlock()
+
+	membersInGuild, ok := s.memberMap[guildID]
+	if !ok {
+		return nil, ErrStateNotFound
+	}
+
+	membersAsArray := make([]*Member, len(membersInGuild))
+	currentIndex := -1
+	for _, member := range membersInGuild {
+		currentIndex++
+		membersAsArray[currentIndex] = member
+	}
+
+	return membersAsArray, nil
 }
 
 // RoleAdd adds a role to the current world state, or
@@ -1101,4 +1167,38 @@ func firstRoleColorColor(guild *Guild, memberRoles []string) int {
 	}
 
 	return 0
+}
+
+// Users returns all users available in cache. Since there is no dedicated
+// for users, this accesses all available guild Members and UserChannels.
+func (s *State) Users() ([]*User, error) {
+	if s == nil {
+		return nil, ErrNilState
+	}
+
+	s.RLock()
+	defer s.RUnlock()
+
+	deduplicatedUsers := make(map[string]*User)
+
+	for _, guildMembers := range s.memberMap {
+		for _, member := range guildMembers {
+			deduplicatedUsers[member.User.ID] = member.User
+		}
+	}
+
+	for _, channel := range s.channelMap {
+		if channel.Type == ChannelTypeGroupDM || channel.Type == ChannelTypeDM {
+			for _, user := range channel.Recipients {
+				deduplicatedUsers[user.ID] = user
+			}
+		}
+	}
+
+	users := make([]*User, 0, len(deduplicatedUsers))
+	for _, user := range deduplicatedUsers {
+		users = append(users, user)
+	}
+
+	return users, nil
 }

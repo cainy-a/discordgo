@@ -1,7 +1,7 @@
 // Discordgo - Discord bindings for Go
-// Available at https://github.com/bwmarrin/discordgo
+// Available at https://github.com/cainy-a/discordgo
 
-// Copyright 2015-2016 Bruce Marriner <bruce@sqls.net>.  All rights reserved.
+// Copyright 2015-2021 Cain Atkinson <yellowsink@protonmail.com>.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -438,6 +438,9 @@ type Guild struct {
 	// The ID of the AFK voice channel.
 	AfkChannelID string `json:"afk_channel_id"`
 
+	// The ID of the embed channel ID, used for embed widgets.
+	EmbedChannelID string `json:"embed_channel_id"`
+
 	// The user ID of the owner of the guild.
 	OwnerID string `json:"owner_id"`
 
@@ -465,6 +468,9 @@ type Guild struct {
 
 	// The verification level required for the guild.
 	VerificationLevel VerificationLevel `json:"verification_level"`
+
+	// Whether the guild has embedding enabled.
+	EmbedEnabled bool `json:"embed_enabled"`
 
 	// Whether the guild is considered large. This is
 	// determined by a member threshold in the identify packet,
@@ -727,10 +733,40 @@ type VoiceState struct {
 
 // A Presence stores the online, offline, or idle and game status of Guild members.
 type Presence struct {
-	User       *User       `json:"user"`
-	Status     Status      `json:"status"`
-	Activities []*Activity `json:"activities"`
-	Since      *int        `json:"since"`
+	User       *User    `json:"user"`
+	Status     Status   `json:"status"`
+	Game       *Game    `json:"game"`
+	Activities []*Activity  `json:"activities"`
+	Nick       string   `json:"nick"`
+	Roles      []string `json:"roles"`
+	Since      *int     `json:"since"`
+}
+
+// GameType is the type of "game" (see GameType* consts) in the Game struct
+type GameType int
+
+// Valid GameType values
+const (
+	GameTypeGame GameType = iota
+	GameTypeStreaming
+	GameTypeListening
+	GameTypeWatching
+	GameTypeCustom
+)
+
+// A Game struct holds the name of the "playing .." game for a user
+type Game struct {
+	Name          string     `json:"name"`
+	Type          GameType   `json:"type"`
+	URL           string     `json:"url,omitempty"`
+	Details       string     `json:"details,omitempty"`
+	State         string     `json:"state,omitempty"`
+	Emoji         Emoji      `json:"emoji,omitempty"`
+	TimeStamps    TimeStamps `json:"timestamps,omitempty"`
+	Assets        Assets     `json:"assets,omitempty"`
+	ApplicationID string     `json:"application_id,omitempty"`
+	Instance      int8       `json:"instance,omitempty"`
+	// TODO: Party and Secrets (unknown structure)
 }
 
 // A TimeStamps struct contains start and end times used in the rich presence "playing .." Game
@@ -813,6 +849,7 @@ type Settings struct {
 	RestrictedGuilds       []string           `json:"restricted_guilds"`
 	FriendSourceFlags      *FriendSourceFlags `json:"friend_source_flags"`
 	Status                 Status             `json:"status"`
+	CustomStatus           CustomStatus       `json:"custom_status"`
 	DetectPlatformAccounts bool               `json:"detect_platform_accounts"`
 	DeveloperMode          bool               `json:"developer_mode"`
 }
@@ -829,12 +866,34 @@ const (
 	StatusOffline      Status = "offline"
 )
 
+// CustomStatus represents a user's custom status
+type CustomStatus struct {
+	Text      string `json:"text"`
+	EmojiName string `json:"emoji_name,omitempty"`
+	ExpiresAt string `json:"expires_at,omitempty"`
+}
+
 // FriendSourceFlags stores ... TODO :)
 type FriendSourceFlags struct {
 	All           bool `json:"all"`
 	MutualGuilds  bool `json:"mutual_guilds"`
 	MutualFriends bool `json:"mutual_friends"`
 }
+
+const (
+	// RelationTypeFriend is an external constant for a relationship type
+	// in discordgo.
+	RelationTypeFriend = 1
+	// RelationTypeBlocked is an external constant for a relationship type
+	// in discordgo.
+	RelationTypeBlocked = 2
+	// RelationTypeIncommingRequest is an external constant for a relationship
+	// type in discordgo.
+	RelationTypeIncommingRequest = 3
+	// RelationTypeOutgoingRequest is an external constant for a relationship
+	// type in discordgo.
+	RelationTypeOutgoingRequest = 4
+)
 
 // A Relationship between the logged in user and Relationship.User
 type Relationship struct {
@@ -876,6 +935,17 @@ type ReadState struct {
 	MentionCount  int    `json:"mention_count"`
 	LastMessageID string `json:"last_message_id"`
 	ID            string `json:"id"`
+}
+
+// GetLastMessageID returns the LastMessageID attribute and returns an empty
+// string in case the Discord API returned a zero to signal an empty string.
+func (readState *ReadState) GetLastMessageID() string {
+	asString, ok := readState.LastMessageID.(string)
+	if ok {
+		return asString
+	}
+
+	return ""
 }
 
 // An Ack is used to ack messages
@@ -1057,19 +1127,39 @@ const (
 
 // A UserGuildSettingsChannelOverride stores data for a channel override for a users guild settings.
 type UserGuildSettingsChannelOverride struct {
-	Muted                bool   `json:"muted"`
-	MessageNotifications int    `json:"message_notifications"`
-	ChannelID            string `json:"channel_id"`
+	Muted                bool        `json:"muted"`
+	MuteConfig           *MuteConfig `json:"mute_config"`
+	MessageNotifications int         `json:"message_notifications"`
+	ChannelID            string      `json:"channel_id"`
 }
 
 // A UserGuildSettings stores data for a users guild settings.
 type UserGuildSettings struct {
 	SupressEveryone      bool                                `json:"suppress_everyone"`
 	Muted                bool                                `json:"muted"`
+	MuteConfig           *MuteConfig                         `json:"mute_config"`
 	MobilePush           bool                                `json:"mobile_push"`
 	MessageNotifications int                                 `json:"message_notifications"`
 	GuildID              string                              `json:"guild_id"`
 	ChannelOverrides     []*UserGuildSettingsChannelOverride `json:"channel_overrides"`
+}
+
+// MuteConfig is used for specifying the time window in which a guild or
+// channel is muted.
+type MuteConfig struct {
+	EndTime            Timestamp `json:"end_time"`
+	SelectedTimeWindow int       `json:"selected_time_window"`
+}
+
+// GetGuildID is a workaround for when the Discord API send an integer instead
+// of sending a string.
+func (settings *UserGuildSettings) GetGuildID() string {
+	asString, ok := settings.GuildID.(string)
+	if ok {
+		return asString
+	}
+
+	return ""
 }
 
 // A UserGuildSettingsEdit stores data for editing UserGuildSettings
@@ -1085,6 +1175,27 @@ type UserGuildSettingsEdit struct {
 type APIErrorMessage struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
+}
+
+// Webhook stores the data for a webhook.
+type Webhook struct {
+	ID        string `json:"id"`
+	GuildID   string `json:"guild_id"`
+	ChannelID string `json:"channel_id"`
+	User      *User  `json:"user"`
+	Name      string `json:"name"`
+	Avatar    string `json:"avatar"`
+	Token     string `json:"token"`
+}
+
+// WebhookParams is a struct for webhook params, used in the WebhookExecute command.
+type WebhookParams struct {
+	Content   string          `json:"content,omitempty"`
+	Username  string          `json:"username,omitempty"`
+	AvatarURL string          `json:"avatar_url,omitempty"`
+	TTS       bool            `json:"tts,omitempty"`
+	File      string          `json:"file,omitempty"`
+	Embeds    []*MessageEmbed `json:"embeds,omitempty"`
 }
 
 // MessageReaction stores the data for a message reaction.
@@ -1124,6 +1235,7 @@ type Activity struct {
 type ActivityType int
 
 // Valid ActivityType values
+// https://discord.com/developers/docs/topics/gateway#activity-object-activity-types
 const (
 	ActivityTypeGame ActivityType = iota
 	ActivityTypeStreaming

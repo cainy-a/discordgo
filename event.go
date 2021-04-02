@@ -168,7 +168,8 @@ func (s *Session) handle(t string, i interface{}) {
 		if s.SyncEvents {
 			eh.eventHandler.Handle(s, i)
 		} else {
-			go eh.eventHandler.Handle(s, i)
+			ehTemp := eh
+			go ehTemp.eventHandler.Handle(s, i)
 		}
 	}
 
@@ -177,7 +178,8 @@ func (s *Session) handle(t string, i interface{}) {
 			if s.SyncEvents {
 				eh.eventHandler.Handle(s, i)
 			} else {
-				go eh.eventHandler.Handle(s, i)
+				ehTemp := eh
+				go ehTemp.eventHandler.Handle(s, i)
 			}
 		}
 		s.onceHandlers[t] = nil

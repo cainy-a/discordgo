@@ -1,7 +1,7 @@
 // Discordgo - Discord bindings for Go
-// Available at https://github.com/bwmarrin/discordgo
+// Available at https://github.com/cainy-a/discordgo
 
-// Copyright 2015-2016 Bruce Marriner <bruce@sqls.net>.  All rights reserved.
+// Copyright 2015-2021 Cain Atkinson <yellowsink@protonmail.com>.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -26,6 +27,34 @@ const VERSION = "0.23.0"
 
 // ErrMFA will be risen by New when the user has 2FA.
 var ErrMFA = errors.New("account has 2FA enabled")
+
+const fakeBrowserUserAgent = "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:82.0) Gecko/20100101 Firefox/82.0"
+const botUserAgent = "Discord Bot (cainy-a/discordgo)"
+
+// NewWithToken creates a new Discord session and will use the given token
+// for authorization.
+func NewWithToken(token string) (s *Session, err error) {
+	s, err = New()
+	//Make sure there's no unnecessary spaces / newlines from pasting.
+	token = strings.TrimSpace(token)
+	if strings.HasPrefix(strings.ToLower(token), "bot") {
+		//Cut off "bot", ignoring casing and make sure it's "Bot "
+		token = "Bot " + strings.TrimSpace(string([]rune(token)[3:]))
+		s.Identify.Intents = MakeIntent(IntentsAllWithoutPrivileged)
+		s.UserAgent = botUserAgent
+	} else {
+		s.MFA = strings.HasPrefix(token, "mfa")
+		s.UserAgent = fakeBrowserUserAgent
+	}
+
+	s.Token = token
+	s.Identify.Token = token
+
+	// The Session is now able to have RestAPI methods called on it.
+	// It is recommended that you now call Open() so that events will trigger.
+
+	return s, nil
+}
 
 // New creates a new Discord session and will automate some startup
 // tasks if given enough information to do so.  Currently you can pass zero
@@ -62,7 +91,6 @@ func New(args ...interface{}) (s *Session, err error) {
 		ShardCount:             1,
 		MaxRestRetries:         3,
 		Client:                 &http.Client{Timeout: (20 * time.Second)},
-		UserAgent:              "DiscordBot (https://github.com/bwmarrin/discordgo, v" + VERSION + ")",
 		sequence:               new(int64),
 		LastHeartbeatAck:       time.Now().UTC(),
 	}
@@ -156,6 +184,9 @@ func New(args ...interface{}) (s *Session, err error) {
 			return
 		}
 	}
+
+	// The Session is now able to have RestAPI methods called on it.
+	// It is recommended that you now call Open() so that events will trigger.
 
 	return
 }

@@ -1,7 +1,7 @@
 // Discordgo - Discord bindings for Go
-// Available at https://github.com/bwmarrin/discordgo
+// Available at https://github.com/cainy-a/discordgo
 
-// Copyright 2015-2016 Bruce Marriner <bruce@sqls.net>.  All rights reserved.
+// Copyright 2015-2021 Cain Atkinson <yellowsink@protonmail.com>.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -582,6 +582,8 @@ func (s *Session) onEvent(messageType int, message []byte) (*Event, error) {
 
 		// Attempt to unmarshal our event.
 		if err = json.Unmarshal(e.RawData, e.Struct); err != nil {
+			//fmt.Println((string)(e.RawData))
+			//os.Exit(0)
 			s.log(LogError, "error unmarshalling %s event, %s", e.Type, err)
 		}
 
