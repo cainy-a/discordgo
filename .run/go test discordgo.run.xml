@@ -1,0 +1,12 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="go test discordgo" type="GoTestRunConfiguration" factoryName="Go Test" nameIsGenerated="true">
+    <module name="discordgo" />
+    <working_directory value="$PROJECT_DIR$" />
+    <framework value="gotest" />
+    <kind value="DIRECTORY" />
+    <package value="github.com/cainy-a/discordgo" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$" />
+    <method v="2" />
+  </configuration>
+</component>

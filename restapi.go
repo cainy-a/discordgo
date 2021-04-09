@@ -1885,10 +1885,14 @@ func (s *Session) ChannelMessageSendEmbed(channelID string, embed *MessageEmbed)
 // channelID : The ID of a Channel.
 // content   : The message to send.
 // reference : The message reference to send.
-func (s *Session) ChannelMessageSendReply(channelID string, content string, reference *MessageReference) (*Message, error) {
+func (s *Session) ChannelMessageSendReply(channelID string, content string, reference *MessageReference, mention bool) (*Message, error) {
 	return s.ChannelMessageSendComplex(channelID, &MessageSend{
 		Content:   content,
 		Reference: reference,
+		AllowedMentions: &MessageAllowedMentions{
+			Parse:       []AllowedMentionType{AllowedMentionTypeEveryone, AllowedMentionTypeUsers, AllowedMentionTypeRoles},
+			RepliedUser: mention,
+		},
 	})
 }
 
