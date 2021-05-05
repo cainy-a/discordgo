@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -352,6 +353,11 @@ type Emoji struct {
 	Animated      bool     `json:"animated"`
 	Available     bool     `json:"available"`
 }
+
+// EmojiRegex is the regex used to find and identify emojis in messages
+var (
+	EmojiRegex = regexp.MustCompile(`<(a|):[A-z0-9_~]+:[0-9]{18}>`)
+)
 
 // MessageFormat returns a correctly formatted Emoji for use in Message content and embeds
 func (e *Emoji) MessageFormat() string {
@@ -827,6 +833,9 @@ type Member struct {
 
 	// Is true while the member hasn't accepted the membership screen.
 	Pending bool `json:"pending"`
+
+	// Total permissions of the member in the channel, including overrides, returned when in the interaction object.
+	Permissions int64 `json:"permissions,string"`
 }
 
 // Mention creates a member mention
@@ -1206,9 +1215,74 @@ type GatewayStatusUpdate struct {
 // Activity defines the Activity sent with GatewayStatusUpdate
 // https://discord.com/developers/docs/topics/gateway#activity-object
 type Activity struct {
-	Name string       `json:"name"`
-	Type ActivityType `json:"type"`
-	URL  string       `json:"url,omitempty"`
+	Name          string       `json:"name"`
+	Type          ActivityType `json:"type"`
+	URL           string       `json:"url,omitempty"`
+	CreatedAt     time.Time    `json:"created_at"`
+	ApplicationID string       `json:"application_id,omitempty"`
+	State         string       `json:"state,omitempty"`
+	Details       string       `json:"details,omitempty"`
+	Timestamps    TimeStamps   `json:"timestamps,omitempty"`
+	Emoji         Emoji        `json:"emoji,omitempty"`
+	Party         Party        `json:"party,omitempty"`
+	Assets        Assets       `json:"assets,omitempty"`
+	Secrets       Secrets      `json:"secrets,omitempty"`
+	Instance      bool         `json:"instance,omitempty"`
+	Flags         int          `json:"flags,omitempty"`
+}
+
+// UnmarshalJSON is a custom unmarshaljson to make CreatedAt a time.Time instead of an int
+func (activity *Activity) UnmarshalJSON(b []byte) error {
+	temp := struct {
+		Name          string       `json:"name"`
+		Type          ActivityType `json:"type"`
+		URL           string       `json:"url,omitempty"`
+		CreatedAt     int64        `json:"created_at"`
+		ApplicationID string       `json:"application_id,omitempty"`
+		State         string       `json:"state,omitempty"`
+		Details       string       `json:"details,omitempty"`
+		Timestamps    TimeStamps   `json:"timestamps,omitempty"`
+		Emoji         Emoji        `json:"emoji,omitempty"`
+		Party         Party        `json:"party,omitempty"`
+		Assets        Assets       `json:"assets,omitempty"`
+		Secrets       Secrets      `json:"secrets,omitempty"`
+		Instance      bool         `json:"instance,omitempty"`
+		Flags         int          `json:"flags,omitempty"`
+	}{}
+	err := json.Unmarshal(b, &temp)
+	if err != nil {
+		return err
+	}
+	activity.CreatedAt = time.Unix(0, temp.CreatedAt*1000000)
+	activity.ApplicationID = temp.ApplicationID
+	activity.Assets = temp.Assets
+	activity.Details = temp.Details
+	activity.Emoji = temp.Emoji
+	activity.Flags = temp.Flags
+	activity.Instance = temp.Instance
+	activity.Name = temp.Name
+	activity.Party = temp.Party
+	activity.Secrets = temp.Secrets
+	activity.State = temp.State
+	activity.Timestamps = temp.Timestamps
+	activity.Type = temp.Type
+	activity.URL = temp.URL
+	return nil
+}
+
+// Party defines the Party field in the Activity struct
+// https://discord.com/developers/docs/topics/gateway#activity-object
+type Party struct {
+	ID   string `json:"id,omitempty"`
+	Size []int  `json:"size,omitempty"`
+}
+
+// Secrets defines the Secrets field for the Activity struct
+// https://discord.com/developers/docs/topics/gateway#activity-object
+type Secrets struct {
+	Join     string `json:"join,omitempty"`
+	Spectate string `json:"spectate,omitempty"`
+	Match    string `json:"match,omitempty"`
 }
 
 // ActivityType is the type of Activity (see ActivityType* consts) in the Activity struct
@@ -1251,48 +1325,52 @@ type IdentifyProperties struct {
 // Constants for the different bit offsets of text channel permissions
 const (
 	// Deprecated: PermissionReadMessages has been replaced with PermissionViewChannel for text and voice channels
-	PermissionReadMessages = 1 << (iota + 10)
-	PermissionSendMessages
-	PermissionSendTTSMessages
-	PermissionManageMessages
-	PermissionEmbedLinks
-	PermissionAttachFiles
-	PermissionReadMessageHistory
-	PermissionMentionEveryone
-	PermissionUseExternalEmojis
+	PermissionReadMessages       = 0x0000000000000400
+	PermissionSendMessages       = 0x0000000000000800
+	PermissionSendTTSMessages    = 0x0000000000001000
+	PermissionManageMessages     = 0x0000000000002000
+	PermissionEmbedLinks         = 0x0000000000004000
+	PermissionAttachFiles        = 0x0000000000008000
+	PermissionReadMessageHistory = 0x0000000000010000
+	PermissionMentionEveryone    = 0x0000000000020000
+	PermissionUseExternalEmojis  = 0x0000000000040000
+	PermissionUseSlashCommands   = 0x0000000080000000
 )
 
 // Constants for the different bit offsets of voice permissions
 const (
-	PermissionVoiceConnect = 1 << (iota + 20)
-	PermissionVoiceSpeak
-	PermissionVoiceMuteMembers
-	PermissionVoiceDeafenMembers
-	PermissionVoiceMoveMembers
-	PermissionVoiceUseVAD
-	PermissionVoicePrioritySpeaker = 1 << (iota + 2)
+	PermissionVoicePrioritySpeaker = 0x0000000000000100
+	PermissionVoiceStreamVideo     = 0x0000000000000200
+	PermissionVoiceConnect         = 0x0000000000100000
+	PermissionVoiceSpeak           = 0x0000000000200000
+	PermissionVoiceMuteMembers     = 0x0000000000400000
+	PermissionVoiceDeafenMembers   = 0x0000000000800000
+	PermissionVoiceMoveMembers     = 0x0000000001000000
+	PermissionVoiceUseVAD          = 0x0000000002000000
+	PermissionVoiceRequestToSpeak  = 0x0000000100000000
 )
 
 // Constants for general management.
 const (
-	PermissionChangeNickname = 1 << (iota + 26)
-	PermissionManageNicknames
-	PermissionManageRoles
-	PermissionManageWebhooks
-	PermissionManageEmojis
+	PermissionChangeNickname  = 0x0000000004000000
+	PermissionManageNicknames = 0x0000000008000000
+	PermissionManageRoles     = 0x0000000010000000
+	PermissionManageWebhooks  = 0x0000000020000000
+	PermissionManageEmojis    = 0x0000000040000000
 )
 
 // Constants for the different bit offsets of general permissions
 const (
-	PermissionCreateInstantInvite = 1 << iota
-	PermissionKickMembers
-	PermissionBanMembers
-	PermissionAdministrator
-	PermissionManageChannels
-	PermissionManageServer
-	PermissionAddReactions
-	PermissionViewAuditLogs
-	PermissionViewChannel = 1 << (iota + 2)
+	PermissionCreateInstantInvite = 0x0000000000000001
+	PermissionKickMembers         = 0x0000000000000002
+	PermissionBanMembers          = 0x0000000000000004
+	PermissionAdministrator       = 0x0000000000000008
+	PermissionManageChannels      = 0x0000000000000010
+	PermissionManageServer        = 0x0000000000000020
+	PermissionAddReactions        = 0x0000000000000040
+	PermissionViewAuditLogs       = 0x0000000000000080
+	PermissionViewChannel         = 0x0000000000000400
+	PermissionViewGuildInsights   = 0x0000000000080000
 
 	PermissionAllText = PermissionViewChannel |
 		PermissionSendMessages |
