@@ -1659,12 +1659,19 @@ func (s *Session) ChannelMessages(channelID string, limit int, beforeID, afterID
 // messageID : the ID of a Message
 func (s *Session) ChannelMessage(channelID, messageID string) (st *Message, err error) {
 
-	response, err := s.RequestWithBucketID("GET", EndpointChannelMessage(channelID, messageID), nil, EndpointChannelMessage(channelID, ""))
+	messages, err := s.ChannelMessages(channelID, 100, "", "", messageID)
 	if err != nil {
 		return
 	}
 
-	err = unmarshal(response, &st)
+	// Slightly inefficient loop but oh well we just need this to work with user accounts :)
+	for _, message := range messages {
+		if message.ID == messageID {
+			st = message
+		}
+	}
+
+	err = errors.New("None of the last 100 messages contained the ID")
 	return
 }
 
