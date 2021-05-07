@@ -1661,25 +1661,17 @@ func (s *Session) ChannelMessage(channelID, messageID string) (st *Message, err 
 
 	messages, err := s.ChannelMessages(channelID, 100, "", "", messageID)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	found := false
 	// Slightly inefficient loop but oh well we just need this to work with user accounts :)
 	for _, message := range messages {
 		if message.ID == messageID {
-			st = message
-			found = true
-			break
+			return message, nil
 		}
 	}
 
-	if found {
-		err = errors.New("")
-	} else {
-		err = errors.New("None of the last 100 messages contained the ID")
-	}
-	return
+	return nil, errors.New("none of the last 100 messages contained the ID")
 }
 
 // ChannelMessageAck acknowledges and marks the given message as read
