@@ -249,7 +249,7 @@ type MessageAllowedMentions struct {
 	Users []string `json:"users,omitempty"`
 
 	// Allows disabling of mentioning the reply author
-	RepliedUser bool `json:"replied_user,omitempty"`
+	RepliedUser bool `json:"replied_user"`
 }
 
 // A MessageAttachment stores data for message attachments.
