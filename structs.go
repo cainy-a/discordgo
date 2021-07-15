@@ -1140,7 +1140,7 @@ type UserGuildSettingsChannelOverride struct {
 	Muted                bool        `json:"muted"`
 	MuteConfig           *MuteConfig `json:"mute_config"`
 	MessageNotifications int         `json:"message_notifications"`
-	ChannelID            string      `json:"channel_id"`
+	ChannelID            interface{}      `json:"channel_id"`
 }
 
 // A UserGuildSettings stores data for a users guild settings.
