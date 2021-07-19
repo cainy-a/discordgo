@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -39,6 +40,7 @@ var (
 	ErrGuildNoIcon             = errors.New("guild does not have an icon set")
 	ErrGuildNoSplash           = errors.New("guild does not have a splash set")
 	ErrUnauthorized            = errors.New("HTTP request was unauthorized. This could be because the provided token was not a bot token. Please add \"Bot \" to the start of your token. https://discord.com/developers/docs/reference#authentication-example-bot-token-authorization-header")
+	ReallyDumbRegex            = regexp.MustCompile(`https:\/\/\w+\.com\/api\/v\d\/guilds\/\d+\/members\/@me`)
 )
 
 // Request is the same as RequestWithBucketID but the bucket id is the same as the urlStr
@@ -92,6 +94,17 @@ func (s *Session) RequestWithLockedBucket(method, urlStr, contentType string, b 
 	// request body is empty.
 	if b != nil {
 		req.Header.Set("Content-Type", contentType)
+	}
+	req.Header.Set("Origin", "https://discord.com")
+
+	// Dumb but I think works? Haven't got banned/locked from using these features yet atleast
+	dumbRegex := ReallyDumbRegex.FindStringSubmatch(urlStr)
+	if len(dumbRegex) > 1 {
+		req.Header.Set("refer", "https://canary.discord.com/channels/"+dumbRegex[1])
+	}
+
+	if urlStr == "https://discord.com/api/"+APIVersion+"/users/@me/channels" {
+		req.Header.Set("referer", "https://discord.com/channels/@me")
 	}
 
 	// TODO: Make a configurable static variable.
