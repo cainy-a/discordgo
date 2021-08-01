@@ -1,4 +1,4 @@
-module github.com/cainy-a/discordgo
+module github.com/gord-project/discordgo
 
 go 1.12
 
